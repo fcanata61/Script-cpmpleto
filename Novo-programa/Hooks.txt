@@ -1,0 +1,143 @@
+USO DE HOOKS NO SISTEMA DE CONSTRUÇÃO
+=====================================
+
+1. O QUE SÃO HOOKS
+-------------------
+Hooks são pequenos scripts ou funções especiais executados
+automaticamente antes ou depois de certas etapas do processo
+de construção ou instalação de pacotes.
+
+Eles permitem executar ações adicionais sem modificar o fluxo principal.
+
+
+2. POR QUE HOOKS SÃO NECESSÁRIOS
+---------------------------------
+Alguns programas exigem ajustes ou tarefas especiais que o build padrão
+não cobre. Exemplos:
+
+- Regerar caches do sistema (ex: ldconfig, gtk-update-icon-cache)
+- Atualizar banco de fontes (fc-cache)
+- Atualizar esquema D-Bus, GSettings, ou MIME
+- Criar usuários ou grupos de sistema (ex: "dbus", "gdm")
+- Configurar serviços (systemd, D-Bus, etc.)
+- Corrigir permissões ou mover arquivos após instalação
+- Rodar scripts pós-build de otimização
+
+Esses casos ocorrem com frequência em pacotes como:
+- glib2, gtk3, gdk-pixbuf
+- dbus, systemd, udev
+- gnome-shell, plasma-workspace
+- firefox (para symlinks de plugin)
+- fontconfig, freetype, cairo
+
+
+3. TIPOS DE HOOKS
+------------------
+O sistema reconhece 3 tipos principais de hooks:
+
+   a) pre-build    → executado antes da compilação
+   b) post-build   → executado logo após a compilação
+   c) post-install → executado depois da instalação no sistema final
+
+Cada tipo de hook é opcional.
+
+
+4. LOCALIZAÇÃO DOS HOOKS
+-------------------------
+Os hooks ficam em um diretório separado, ex.:
+
+    /system-root/hooks/
+       ├── pre-build/
+       ├── post-build/
+       └── post-install/
+
+Cada hook pode ter o nome do pacote ou um nome genérico.
+
+Exemplos:
+    /hooks/post-install/gtk-update-icon-cache
+    /hooks/post-install/ldconfig
+    /hooks/pre-build/firefox-clean
+    /hooks/post-install/fonts-refresh
+
+
+5. COMO OS SCRIPTS CHAMAM OS HOOKS
+-----------------------------------
+Durante o processo de build, os scripts principais fazem verificações simples:
+
+- Antes de compilar:
+    se existir /hooks/pre-build/$NAME → executa
+
+- Após compilar:
+    se existir /hooks/post-build/$NAME → executa
+
+- Após instalar:
+    se existir /hooks/post-install/$NAME → executa
+    se existir /hooks/post-install/global → executa para todos
+
+
+6. QUANDO OS HOOKS SÃO ESSENCIAIS
+----------------------------------
+Casos reais onde o uso é obrigatório:
+
+- **glib2** → precisa rodar `glib-compile-schemas`
+- **gtk3** → precisa atualizar cache de ícones e temas
+- **dbus** → precisa criar diretórios e usuário "messagebus"
+- **fontconfig** → precisa atualizar o cache global de fontes
+- **udev/systemd** → precisam instalar unidades e reconfigurar serviços
+- **kde/gnome** → precisam atualizar MIME, desktop-db, icons e schemas
+
+Sem hooks, esses pacotes instalam corretamente mas não funcionam
+no ambiente final.
+
+
+7. HOOKS GENÉRICOS VS ESPECÍFICOS
+----------------------------------
+- **Hooks específicos**: ligados a um pacote em particular (ex: post-install/dbus)
+- **Hooks genéricos**: executados para todos os pacotes (ex: post-install/global)
+
+Exemplo de uso:
+    Após instalar qualquer pacote, rodar:
+    - ldconfig
+    - update-desktop-database
+    - fc-cache -f
+
+
+8. DEFINIÇÃO DE HOOKS NO .DESC (opcional)
+------------------------------------------
+Um .desc pode opcionalmente declarar seus próprios hooks:
+
+    HOOKS_PRE_BUILD = clean_env
+    HOOKS_POST_INSTALL = update_mime_cache
+
+O sistema procura esses nomes nos diretórios correspondentes e executa automaticamente.
+
+
+9. VANTAGENS DE USAR HOOKS
+---------------------------
+✔ Mantém os scripts principais simples e genéricos  
+✔ Permite comportamentos dinâmicos sem hardcode  
+✔ Facilita manutenção (adicionar/remover hooks é modular)  
+✔ Permite suporte fácil a GNOME/KDE e pacotes complexos  
+✔ Garante sistema funcional pós-instalação  
+
+
+10. RESUMO
+----------
+Hooks são extensões automáticas que permitem:
+- Executar ações antes/depois do build ou da instalação
+- Ajustar o sistema sem alterar o fluxo principal
+- Garantir funcionamento de pacotes complexos (desktop, gráficos, etc.)
+
+Fluxo simplificado:
+
+build(pkg)
+ ├─> pre-build hooks
+ ├─> compilação normal
+ ├─> post-build hooks
+ ├─> instalação
+ └─> post-install hooks
+
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
