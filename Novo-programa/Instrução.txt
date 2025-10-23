@@ -1,0 +1,154 @@
+LOCALIZAÇÃO E DETECÇÃO DOS ARQUIVOS .DESC
+==========================================
+
+1. ESTRUTURA DE DIRETÓRIOS
+---------------------------
+O sistema segue uma hierarquia simples, padronizada, onde
+todos os pacotes (com seus .desc) ficam dentro de uma árvore única.
+
+Exemplo:
+
+/system-root/
+ ├── config.txt              ← configuração global
+ ├── scripts/                ← scripts principais (build, fetch, install, etc.)
+ ├── package/                ← repositório de receitas
+ │    ├── base/              ← pacotes essenciais (core)
+ │    │    ├── bash/
+ │    │    │    └── bash.desc
+ │    │    ├── bc/
+ │    │    │    └── bc.desc
+ │    │    └── gcc/
+ │    │         └── gcc.desc
+ │    ├── libs/              ← bibliotecas
+ │    │    ├── glib2/
+ │    │    │    └── glib2.desc
+ │    ├── apps/              ← aplicativos
+ │    │    ├── firefox/
+ │    │    │    └── firefox.desc
+ │    │    ├── kdenlive/
+ │    │    │    └── kdenlive.desc
+ │    │    └── gedit/
+ │    │         └── gedit.desc
+ │    └── desktop/           ← KDE, GNOME, etc.
+ │         └── kde-plasma/
+ │              └── kde-plasma.desc
+ └── output/                 ← pacotes construídos
+
+
+2. ARQUIVO DE CONFIGURAÇÃO GLOBAL
+----------------------------------
+O arquivo config.txt define uma variável essencial:
+
+    PKG_TREE="/system-root/package"
+
+Essa variável é usada por todos os scripts para saber
+onde buscar os .desc dos pacotes.
+
+Os scripts não precisam saber onde o pacote está fisicamente,
+apenas leem PKG_TREE e fazem uma busca recursiva.
+
+
+3. LOCALIZAÇÃO DE UM PACOTE (.DESC)
+-----------------------------------
+Quando o usuário executa, por exemplo:
+
+    pkg install firefox
+
+O script principal (`pkg` ou `controller`) faz:
+
+1. Lê o nome do pacote solicitado: "firefox"
+2. Usa o caminho base: `$PKG_TREE`
+3. Executa uma busca recursiva:
+
+       find "$PKG_TREE" -type f -name "firefox.desc"
+
+4. Se o arquivo for encontrado, retorna o caminho completo:
+       /system-root/package/apps/firefox/firefox.desc
+
+5. Se não for encontrado, exibe:
+       "Pacote firefox não encontrado no repositório local."
+
+
+4. INTERPRETAÇÃO DO .DESC
+--------------------------
+Depois que o .desc é encontrado, o script faz:
+
+    . /system-root/package/apps/firefox/firefox.desc
+
+Isso "carrega" todas as variáveis (NAME, VERSION, URL, etc.)
+e funções (como build()) dentro do ambiente do shell atual.
+
+Assim, os scripts passam a ter acesso direto a:
+
+    $NAME, $VERSION, $URL, $BUILD_DEPS, $BUILD_HINT, etc.
+
+E o sistema sabe exatamente o que precisa fazer.
+
+
+5. RESOLUÇÃO DE DEPENDÊNCIAS
+-----------------------------
+Antes de compilar ou instalar, o sistema chama o resolvedor de dependências (depsolve):
+
+- Ele analisa `$BUILD_DEPS` e `$RUN_DEPS` do .desc
+- Para cada dependência, ele repete o mesmo processo:
+  → localizar o .desc correspondente
+  → carregar as variáveis
+  → adicioná-lo na fila de construção ou instalação
+- Gera uma lista ordenada em ordem correta (dependência → dependente)
+
+
+6. EXECUÇÃO DOS SCRIPTS COM BASE NO .DESC
+------------------------------------------
+Depois que o .desc é carregado, os scripts seguintes agem de forma padronizada:
+
+- fetch: usa `$URL` e `$SHA256`
+- extract: usa `$NAME` e `$VERSION`
+- build: usa `$BUILD_HINT` ou `build()`
+- package: empacota para `$NAME-$VERSION.tar.xz`
+- install: copia o pacote para o sistema final
+
+Ou seja, **os scripts não têm lógica específica de pacotes**;
+eles só leem e executam o que está descrito no .desc.
+
+
+7. INSTALAÇÃO DIRETA (pkg install)
+-----------------------------------
+O comando “pkg install firefox” segue esta sequência lógica:
+
+1. Busca o arquivo firefox.desc
+2. Lê variáveis do .desc
+3. Verifica se o pacote já foi construído (em output/)
+   - Se sim → instala diretamente
+   - Se não → inicia o build automático
+4. Resolve dependências (depsolve)
+5. Executa o build + install
+6. Marca o pacote como instalado no banco local (installed.db)
+
+
+8. VANTAGENS DO MÉTODO
+-----------------------
+✔ Um único repositório de receitas (package/)
+✔ Busca simples e universal com `find`
+✔ Nenhum banco de dados complexo
+✔ Totalmente extensível — basta adicionar novos .desc
+✔ O mesmo mecanismo funciona para build, fetch ou install
+
+
+9. RESUMO DO FLUXO
+-------------------
+pkg install firefox
+  ↓
+find $PKG_TREE -name firefox.desc
+  ↓
+source firefox.desc
+  ↓
+resolver dependências
+  ↓
+executar scripts: fetch → build → package → install
+  ↓
+registrar logs e atualizar banco de pacotes
+
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
