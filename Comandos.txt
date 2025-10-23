@@ -1,0 +1,11 @@
+chmod +x auto-builder.sh
+./auto-builder.sh init
+
+./auto-builder.sh run
+
+./auto-builder.sh build bc
+
+./auto-builder.sh status
+ls auto-builder/artifacts
+tail -n 200 auto-builder/logs/bc-*.log
+
