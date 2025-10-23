@@ -1,0 +1,222 @@
+SISTEMA DE CONSTRUÇÃO COMPLETO - DESCRIÇÃO DOS SCRIPTS
+=======================================================
+
+OBJETIVO:
+---------
+Este conjunto de scripts shell simples é capaz de construir todo um sistema completo,
+incluindo pacotes complexos como KDE, GNOME e Firefox, em ordem correta, com logs,
+dependências, e automação total.
+
+Cada script tem uma função isolada e bem definida. Todos juntos formam o motor de
+compilação completo.
+
+
+-------------------------------------------------------
+1. config.txt
+-------------------------------------------------------
+Arquivo único de configuração global, texto simples.
+Contém todas as variáveis e caminhos usados pelo sistema.
+
+DEVE CONTER:
+- Diretórios (sources, build, logs, output)
+- Arquitetura (x86_64)
+- Quantidade de jobs paralelos
+- URLs de download de pacotes
+- Flags globais de compilação
+- Opções para limpeza e reexecução
+- Caminho do arquivo de lista de pacotes
+- Regras de reintentos em caso de falha
+- Diretório de toolchain (bootstrap)
+
+
+-------------------------------------------------------
+2. 00-bootstrap
+-------------------------------------------------------
+Responsável por preparar o ambiente inicial.
+
+DEVE FAZER:
+- Verificar se o host tem ferramentas básicas (gcc, make, bash, tar, xz)
+- Criar diretórios padrões (sources, build, logs, output)
+- Compilar toolchain mínima (binutils, gcc, glibc)
+- Configurar PATH e variáveis para o ambiente de build
+- Registrar logs e erros da etapa
+- Garantir ambiente limpo e reprodutível
+
+
+-------------------------------------------------------
+3. 01-fetch
+-------------------------------------------------------
+Baixa e valida as fontes dos pacotes.
+
+DEVE FAZER:
+- Ler lista de pacotes ou arquivos .desc
+- Baixar os tarballs originais de cada pacote
+- Verificar integridade via SHA256 ou GPG
+- Evitar re-downloads se já existe e válido
+- Registrar logs de tempo e status
+- Tratar falhas de rede com reintento automático
+
+
+-------------------------------------------------------
+4. 02-extract
+-------------------------------------------------------
+Prepara o código-fonte para compilação.
+
+DEVE FAZER:
+- Extrair o pacote para o diretório temporário
+- Aplicar patches (se houver)
+- Garantir limpeza de diretório anterior
+- Registrar logs da extração
+- Preparar o ambiente (variáveis, permissões)
+
+
+-------------------------------------------------------
+5. 03-depsolve
+-------------------------------------------------------
+Resolve todas as dependências antes de compilar.
+
+DEVE FAZER:
+- Ler dependências (diretas e indiretas) dos pacotes
+- Construir grafo de dependências completo (DAG)
+- Detectar e impedir dependências circulares
+- Gerar lista de build em ordem topológica
+- Registrar mapa de dependências e sequência de build
+- Permitir dependências opcionais controladas por flags
+- Ordenar corretamente pacotes complexos como KDE, GNOME e Firefox
+
+
+-------------------------------------------------------
+6. 04-build
+-------------------------------------------------------
+Executa a compilação dos pacotes em ordem correta.
+
+DEVE FAZER:
+- Ler ordem gerada pelo depsolve
+- Entrar no diretório de build de cada pacote
+- Detectar tipo de build (autotools, cmake, meson, custom)
+- Executar etapas padrão: configure → build (make/ninja)
+- Utilizar variáveis globais (CFLAGS, LDFLAGS, MAKEFLAGS)
+- Suportar builds paralelos e retomáveis
+- Registrar logs e status de compilação
+- Parar em falha e marcar dependentes como bloqueados
+
+
+-------------------------------------------------------
+7. 05-install
+-------------------------------------------------------
+Instala o pacote compilado em ambiente isolado (DESTDIR).
+
+DEVE FAZER:
+- Criar DESTDIR temporário
+- Rodar “make install” ou equivalente
+- Garantir que nada é instalado fora do ambiente isolado
+- Validar estrutura final (bin, lib, include, share)
+- Gerar lista de arquivos instalados
+- Registrar logs de instalação
+
+
+-------------------------------------------------------
+8. 06-package
+-------------------------------------------------------
+Empacota o resultado da instalação em um arquivo final.
+
+DEVE FAZER:
+- Compactar o DESTDIR em tarball (.tar.xz ou .tar.zst)
+- Gerar metadados (nome, versão, hash, tamanho, data)
+- Salvar em diretório de saída (output/)
+- Registrar logs e manifestos
+- Atualizar banco de pacotes construídos
+
+
+-------------------------------------------------------
+9. 07-logger
+-------------------------------------------------------
+Gerencia todos os logs e metadados de build.
+
+DEVE FAZER:
+- Criar um log por pacote e fase
+- Gravar data, duração e resultado (SUCCESS/FAIL)
+- Manter log mestre com resumo global
+- Armazenar JSONs ou texto legível
+- Gerar relatório final com pacotes construídos, falhas e tempos
+
+
+-------------------------------------------------------
+10. 08-clean
+-------------------------------------------------------
+Mantém o ambiente limpo e previsível.
+
+DEVE FAZER:
+- Apagar diretórios temporários de build antigos
+- Preservar fontes e artefatos válidos
+- Compactar logs antigos
+- Recriar estrutura básica quando necessário
+- Garantir que um rebuild começa limpo
+
+
+-------------------------------------------------------
+11. 09-controller
+-------------------------------------------------------
+O “cérebro” do sistema — orquestra todas as fases automaticamente.
+
+DEVE FAZER:
+- Ler config.txt e validar variáveis
+- Chamar scripts na sequência:
+    bootstrap → fetch → extract → depsolve → build → install → package → clean
+- Controlar dependências e status entre fases
+- Reexecutar automaticamente etapas falhas se permitido
+- Registrar progresso global e erros
+- Gerar relatório final com:
+  - Tempo total
+  - Pacotes construídos
+  - Falhas
+  - Logs de referência
+
+
+-------------------------------------------------------
+12. Estrutura de pacotes (.desc)
+-------------------------------------------------------
+Cada pacote é descrito em arquivo simples texto:
+
+DEVE CONTER:
+- NAME, VERSION, URL, SHA256
+- BUILD_DEPS (dependências de compilação)
+- RUN_DEPS (dependências de execução)
+- BUILD_HINT (tipo de build: autotools, cmake, meson)
+- COMMENT (descrição)
+- STAGE (nível de prioridade: core, libs, desktop, apps)
+- OPTIONS (opcionais, ex: wayland, pulseaudio)
+
+Esses arquivos são usados pelo 01-fetch e 03-depsolve.
+
+
+-------------------------------------------------------
+13. Fluxo Completo de Execução
+-------------------------------------------------------
+controller
+ ├─> 00-bootstrap   → cria ambiente base
+ ├─> 01-fetch       → baixa fontes
+ ├─> 02-extract     → prepara código
+ ├─> 03-depsolve    → gera ordem de build
+ ├─> 04-build       → compila pacotes
+ ├─> 05-install     → instala isoladamente
+ ├─> 06-package     → empacota resultados
+ ├─> 07-logger      → registra e resume tudo
+ └─> 08-clean       → limpa e encerra
+
+
+-------------------------------------------------------
+14. RESULTADO FINAL
+-------------------------------------------------------
+Este conjunto mínimo de scripts é suficiente para:
+
+- Construir uma base completa (LFS + BLFS)
+- Resolver e compilar todas as dependências do KDE e GNOME
+- Compilar Firefox e outros grandes projetos (autônomo)
+- Manter logs e manifestos reprodutíveis
+- Funcionar com apenas um arquivo config.txt e scripts shell simples
+
+
+-------------------------------------------------------
+FIM DO ARQUIVO
+-------------------------------------------------------
