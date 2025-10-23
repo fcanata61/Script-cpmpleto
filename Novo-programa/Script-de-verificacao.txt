@@ -1,0 +1,113 @@
+SCRIPT DE VERIFICAÇÃO COMPLETA DE UM PACOTE
+===========================================
+
+Objetivo:
+----------
+Verificar se um pacote pode ser construído, instalado e funciona corretamente
+no sistema, antes de marcar como “pronto” para uso ou empacotamento.
+
+Chamaremos de: verify-pkg <pacote>
+
+
+1. LOCALIZAÇÃO DO PACOTE
+-----------------------
+- Recebe o nome do pacote (ex: firefox)
+- Procura o arquivo .desc correspondente no repositório:
+      find $PKG_TREE -name "$NAME.desc"
+- Se não encontrar → falha: "Pacote não encontrado"
+
+
+2. VERIFICAÇÃO DE INTEGRIDADE
+-----------------------------
+- Lê URL e SHA256 do .desc
+- Verifica se o tarball está disponível na URL
+- Calcula hash SHA256 do arquivo baixado
+- Compara com SHA256 do .desc
+- Se diferente → falha: "Arquivo corrompido"
+
+
+3. VERIFICAÇÃO DE DEPENDÊNCIAS
+-------------------------------
+- Lê BUILD_DEPS e RUN_DEPS do .desc
+- Para cada dependência:
+    - Verifica se está instalada
+    - Verifica versão mínima se definida
+- Marca como “pendente” qualquer dependência não atendida
+- Relatório de dependências pendentes
+- Opcional: sugerir build ou update das dependências
+
+
+4. VERIFICAÇÃO DO BUILD
+------------------------
+- Detecta BUILD_HINT ou função build() no .desc
+- Executa um build isolado em BUILD_DIR temporário
+- Registra logs detalhados
+- Verifica:
+    - Se o build terminou sem erros
+    - Se todos os arquivos esperados foram gerados
+- Se algum erro → falha: "Build falhou"
+- Se build bem-sucedido → continua
+
+
+5. VERIFICAÇÃO DE INSTALAÇÃO
+-----------------------------
+- Instala temporariamente no DESTDIR isolado
+- Verifica se todos os arquivos previstos foram copiados
+- Verifica permissões de arquivos e diretórios
+- Se algum arquivo faltando ou erro de permissão → falha
+
+
+6. VERIFICAÇÃO DE FUNCIONALIDADE BÁSICA
+----------------------------------------
+- Executa teste mínimo do pacote (smoke test):
+    - Para binários → executa comando simples, checa retorno 0
+    - Para bibliotecas → verifica se linka corretamente
+    - Para aplicativos GUI → checa se executa sem crash (modo headless/teste automatizado)
+- Qualquer falha → relatório detalhado
+
+
+7. VERIFICAÇÃO DE HOOKS
+------------------------
+- Se o pacote possui hooks (pre/post build, post-install):
+    - Verifica se hooks estão presentes
+    - Executa em ambiente de teste e valida efeitos
+- Qualquer falha nos hooks → falha do teste
+
+
+8. LOGS E RELATÓRIO FINAL
+--------------------------
+- Todos os logs de fetch, build e install são salvos
+- Relatório final contém:
+    - Pacote
+    - Status geral: OK ou FAIL
+    - Dependências pendentes
+    - Erros de build
+    - Arquivos ausentes
+    - Resultado dos hooks
+- Opcional: gera arquivo .verified para indicar sucesso
+
+
+9. FLUXO RESUMIDO
+-----------------
+verify-pkg <nome_pacote>
+   ├─> localizar .desc
+   ├─> checar hash e URL
+   ├─> verificar dependências
+   ├─> build temporário
+   ├─> instalar temporário
+   ├─> testar funcionalidade básica
+   ├─> testar hooks
+   └─> gerar log e relatório
+
+
+10. VANTAGENS
+-------------
+✔ Garantia de que o pacote está funcional antes do uso
+✔ Detecta problemas de build ou dependências cedo
+✔ Permite automatização completa do processo
+✔ Compatível com qualquer tipo de pacote (simples ou complexo)
+✔ Base para sistemas de update seguro e rollback
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
