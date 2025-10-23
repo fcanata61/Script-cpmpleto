@@ -1,9 +1,0 @@
-NAME = bc
-VERSION = 1.08.2
-URL = https://ftp.gnu.org/gnu/bc/bc-1.08.2.tar.xz
-SHA256 = 76e3a9531c7764bd13c600c1e016e6760d9b8379ba06d1ecc08d5a68
-BUILD_DEPS = readline
-RUN_DEPS =
-BUILD_HINT = autotools
-STAGE = 1
-PRIORITY = normal
