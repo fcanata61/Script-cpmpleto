@@ -1,0 +1,97 @@
+DEPENDÊNCIAS EM ATUALIZAÇÃO DE PACOTES
+======================================
+
+1. PROBLEMA PRINCIPAL
+---------------------
+Quando você atualiza um pacote, as dependências dele podem:
+
+- Não ter mudado → tudo ok
+- Ter uma versão mínima maior → pode ser necessário atualizar também
+- Ter mudado de forma incompatível → pode quebrar outros pacotes que dependem da versão antiga
+
+Exemplo: Firefox 118 → 119
+- Firefox 119 pode exigir Rust >= 1.77
+- Se a versão antiga do Rust era 1.76, você precisa atualizar Rust primeiro
+
+Portanto, **não basta atualizar só o pacote** — precisa checar todas as dependências.
+
+
+2. FLUXO DE DEPENDÊNCIAS DURANTE UPDATE
+----------------------------------------
+Ao executar `pkg update <pacote>`:
+
+1. Lê o .desc atual do pacote
+2. Busca a nova versão estável no mainstream
+3. Baixa ou valida tarball + SHA256
+4. Antes de build:
+   - O script **depsolve** é chamado novamente, **agora usando a versão nova**
+   - Verifica:
+       a) Todas as BUILD_DEPS atendidas
+       b) RUN_DEPS compatíveis
+5. Para qualquer dependência que precise ser atualizada, o sistema:
+   - Adiciona na fila de atualização
+   - Executa update dessas dependências **antes do pacote principal**
+6. Após dependências corretas, atualiza o pacote principal
+7. Opcional: mantém registro das versões antigas (rollback)
+
+
+3. COMO LIDAR COM DEPENDÊNCIAS DE VERSÃO ANTERIOR
+---------------------------------------------------
+- Cada pacote mantém no banco local:
+      installed.db:
+        - NAME
+        - VERSION
+        - BUILD_DEPS
+        - RUN_DEPS
+
+- Quando o update detecta que a nova versão exige dependências maiores:
+      - Verifica banco local
+      - Se a dependência atual < exigida:
+          → agenda atualização da dependência primeiro
+      - Se a dependência atual >= exigida:
+          → não faz nada, mantém
+
+- Isso garante que **dependências da versão anterior** não bloqueiem o update,
+  mas também não quebra pacotes que dependem dela.
+
+
+4. ESTRATÉGIA DE ESTABILIDADE
+------------------------------
+- Só atualiza dependências se necessário (min_version > versão atual)
+- Mantém pacotes não afetados intactos
+- Pode criar "locks" para versões críticas (ex: GTK ou glib)
+- Permite reconstrução em ordem topológica correta: dependência → pacote dependente
+
+
+5. FLUXO COMPLETO DE UPDATE COM DEPENDÊNCIAS
+--------------------------------------------
+pkg update firefox
+ ├─> lê firefox.desc
+ ├─> busca nova versão estável
+ ├─> atualiza .desc temporário
+ ├─> depsolve(build_deps + run_deps da nova versão)
+ │     ├─> detecta que Rust precisa ser >=1.77
+ │     ├─> agenda update rustc antes
+ │     └─> agenda update gtk3, dbus se necessário
+ ├─> executa updates das dependências em ordem correta
+ ├─> build nova versão do firefox
+ ├─> install nova versão
+ ├─> hooks pós-build/pós-install
+ └─> log completo + backup .desc antigo
+
+
+6. RESUMO
+----------
+✔ Dependências da versão antiga não bloqueiam update  
+✔ O sistema resolve **automaticamente** dependências mínimas da versão nova  
+✔ Ordem topológica garante que nada quebre  
+✔ Logs e backup permitem rollback se algo falhar  
+✔ Funciona para pacotes complexos como Firefox, KDE ou GNOME  
+
+Conclusão:
+- Sim, funciona com dependências da versão anterior, desde que o update **verifique os requisitos mínimos da nova versão** antes de compilar.
+- Esse é o comportamento adotado por gerenciadores de pacotes robustos (ex: Portage, pkgsrc, Gentoo, FreeBSD ports).
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
