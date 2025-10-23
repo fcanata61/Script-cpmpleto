@@ -218,5 +218,98 @@ Este conjunto mínimo de scripts é suficiente para:
 
 
 -------------------------------------------------------
+EXEMPLO DE PACOTE .DESC - "bc"
+==============================
+
+Arquivo: package/base/bc/bc.desc
+
+-----------------------------------
+NAME = bc
+VERSION = 1.08.2
+URL = https://ftp.gnu.org/gnu/bc/bc-1.08.2.tar.xz
+SHA256 = 76e3a9531c7764bd13c600c1e016e6760d9b8379ba06d1ecc08d5a68
+BUILD_DEPS = readline
+RUN_DEPS =
+BUILD_HINT = autotools
+STAGE = 1
+PRIORITY = normal
+-----------------------------------
+
+
+SIGNIFICADO DOS CAMPOS
+----------------------
+NAME ........ Nome do pacote
+VERSION ..... Versão a ser construída
+URL ......... Local do tarball original
+SHA256 ...... Verificação de integridade do tarball
+BUILD_DEPS .. Dependências necessárias para compilar
+RUN_DEPS .... Dependências de execução (vazias aqui)
+BUILD_HINT .. Indica o tipo de build usado (autotools, cmake, meson, custom)
+STAGE ....... Ordem geral do sistema (1 = base, 2 = libs, 3 = apps)
+PRIORITY .... Define a prioridade de execução na fila (normal, low, high)
+
+
+COMPORTAMENTO DO SISTEMA
+------------------------
+1. O script **01-fetch** lê este .desc:
+   - Baixa o tarball do campo URL.
+   - Verifica o hash SHA256.
+   - Armazena em sources/bc-1.08.2.tar.xz.
+
+2. O script **02-extract** extrai o pacote:
+   - Cria diretório build/bc-1.08.2.
+   - Extrai o código-fonte dentro dele.
+
+3. O script **03-depsolve** lê "BUILD_DEPS=readline":
+   - Resolve que o pacote "readline" precisa ser construído antes de "bc".
+   - Adiciona bc após readline na fila de build.
+
+4. O script **04-build** faz:
+   - Detecta "BUILD_HINT=autotools".
+   - Executa os comandos padrão:
+        ./configure --prefix=/usr
+        make -j$(nproc)
+        make install DESTDIR=$DESTDIR
+   - Gera logs em logs/bc.log.
+
+5. O script **06-package** empacota:
+   - Compacta o DESTDIR em output/bc-1.08.2.tar.xz.
+   - Cria manifest com lista de arquivos e hash.
+
+6. Nenhuma função "build()" é usada, pois o sistema detectou
+   que "BUILD_HINT=autotools" e aplicou o modo padrão.
+
+
+RESUMO
+------
+Este .desc representa o caso mais simples possível:
+- Pacote básico
+- Nenhum comportamento especial
+- Totalmente automatizável
+- Compilação via autotools padrão
+- Dependência única (readline)
+- Nenhuma função customizada necessária
+
+Isso garante que o motor do sistema trate o pacote
+como parte da base essencial do sistema (Stage 1).
+
+
+FLUXO VISUAL
+-------------
+controller
+ └─> fetch(bc)
+     └─> extract(bc)
+         └─> depsolve(readline)
+             └─> build(bc) [autotools padrão]
+                 └─> install(bc)
+                     └─> package(bc)
+                         └─> done ✅
+
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
+
+
 FIM DO ARQUIVO
 -------------------------------------------------------
