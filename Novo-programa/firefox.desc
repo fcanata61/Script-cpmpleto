@@ -1,0 +1,105 @@
+EXEMPLO DE PACOTE COMPLEXO - FIREFOX.DESC
+=========================================
+
+Arquivo: package/www/firefox/firefox.desc
+
+
+-----------------------------------
+NAME = firefox
+VERSION = 129.0
+URL = https://ftp.mozilla.org/pub/firefox/releases/129.0/source/firefox-129.0.source.tar.xz
+SHA256 = a12b4c6d7e8f9a0b123456789abcdef9876543210fedcba0987654321fedcba09
+BUILD_DEPS = rustc cargo gtk3 python3 nodejs yasm clang llvm dbus glib2
+RUN_DEPS = gtk3 dbus glib2
+BUILD_HINT = custom
+STAGE = 3
+PRIORITY = high
+-----------------------------------
+
+
+FUNÇÃO DE BUILD PERSONALIZADA
+-----------------------------
+# A função build() é usada apenas quando o BUILD_HINT = "custom".
+# Ela substitui o processo padrão (configure/make) e executa as
+# etapas específicas do Firefox (que usa o sistema "mach").
+
+build() {
+    echo "[Firefox] Iniciando build personalizado..."
+
+    # Variáveis do ambiente de build
+    export MOZBUILD_STATE_PATH="$BUILD_DIR/state"
+    export MOZ_SOURCE_REPO="https://hg.mozilla.org/mozilla-unified"
+    export MACH_USE_SYSTEM_PYTHON=1
+    export CC=clang
+    export CXX=clang++
+    export RUSTFLAGS="-C opt-level=2"
+    export CFLAGS="-O2 -pipe"
+    export CXXFLAGS="-O2 -pipe"
+    export LDFLAGS="-Wl,-O1 -Wl,--as-needed"
+
+    # Configuração do ambiente
+    echo "[Firefox] Configurando com ./mach configure..."
+    ./mach configure --prefix=/usr --enable-release --disable-crashreporter --disable-updater
+
+    # Compilação
+    echo "[Firefox] Compilando..."
+    ./mach build -j$(nproc)
+
+    # Instalação no diretório isolado
+    echo "[Firefox] Instalando no DESTDIR..."
+    ./mach install DESTDIR="$DESTDIR"
+
+    echo "[Firefox] Build finalizado com sucesso."
+}
+
+
+COMPORTAMENTO DO SISTEMA
+------------------------
+O sistema lê o arquivo firefox.desc:
+
+1. fetch → baixa o tarball do campo URL
+2. extract → extrai o código-fonte
+3. depsolve → resolve dependências complexas (gtk3, rustc, clang, nodejs etc.)
+4. build:
+   - Detecta BUILD_HINT=custom
+   - Executa a função build() definida aqui
+   - Todos os comandos dentro da função são rodados no ambiente de build
+   - Variáveis globais ($DESTDIR, $BUILD_DIR, $CFLAGS, etc.) são herdadas automaticamente
+5. install → é tratado dentro do próprio build()
+6. package → empacota o resultado em firefox-129.0.tar.xz
+7. logger → registra logs de tempo, sucesso e arquivos gerados
+
+
+RAZÃO PARA O BUILD PERSONALIZADO
+--------------------------------
+O Firefox usa:
+- Python + mach (sistema próprio de build)
+- Rust + C++ misturados
+- Dependências complexas e configurações específicas
+Por isso o build padrão (autotools/cmake) não serve.
+
+A função build() permite controle total sem quebrar o fluxo geral.
+
+
+VANTAGENS
+---------
+✔ Flexibilidade total — qualquer lógica especial pode ser escrita.
+✔ Reutiliza variáveis do sistema global.
+✔ Mantém padronização (o formato é o mesmo que pacotes simples).
+✔ Permite empacotar e registrar logs como qualquer outro pacote.
+
+
+FLUXO RESUMIDO
+--------------
+controller
+ └─> fetch(firefox)
+     └─> extract(firefox)
+         └─> depsolve(gtk3, rustc, nodejs...)
+             └─> build(firefox) [custom build()]
+                 └─> package(firefox)
+                     └─> done ✅
+
+
+-------------------------------------------------------
+FIM DO DOCUMENTO
+-------------------------------------------------------
