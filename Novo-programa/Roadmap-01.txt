@@ -1,16 +1,22 @@
-ROADMAP ATUALIZADO DO SISTEMA DE BUILD COMPLETO
-================================================
+ROADMAP FINAL - SISTEMA DE CONSTRUÇÃO AUTOMATIZADO
+===================================================
 
 Objetivo:
 ---------
-Criar um sistema de construção totalmente automatizado para pacotes simples e complexos (LFS, BLFS, Firefox, KDE, GNOME), x86-64, com suporte a atualização estável, remoção, hooks e verificação completa.
+Criar um sistema de construção e gerenciamento de pacotes automatizado,
+inspirado no T2 SDE, mas:
+- Focado apenas em arquitetura x86-64
+- Com suporte a pacotes simples e complexos (LFS, BLFS, Firefox, KDE, GNOME)
+- Com atualização estável, verificação, hooks e registro completo
+- Totalmente controlado via um comando único: `pkg`
 
 -------------------------------------------------
 1. ESTRUTURA DE DIRETÓRIOS
 ---------------------------
 /system-root/
  ├── config.txt                 ← configuração global
- ├── scripts/                   ← scripts principais
+ ├── scripts/                   ← scripts principais e motor
+ │     ├── controller           ← núcleo de execução de comandos
  │     ├── fetch
  │     ├── extract
  │     ├── build
@@ -20,174 +26,237 @@ Criar um sistema de construção totalmente automatizado para pacotes simples e 
  │     ├── update-pkg
  │     ├── verify-pkg
  │     ├── depsolve
- │     └── controller
- ├── hooks/                     ← hooks opcionais
+ │     └── log-utils            ← funções auxiliares de log
+ ├── hooks/                     ← hooks opcionais (pré/pós eventos)
  │     ├── pre-build/
  │     ├── post-build/
  │     ├── post-install/
  │     └── post-uninstall/
- ├── package/                   ← repositório de receitas (.desc)
+ ├── package/                   ← receitas (.desc) organizadas por categoria
  │     ├── base/
  │     ├── libs/
  │     ├── apps/
  │     └── desktop/
- ├── sources/                   ← tarballs baixados
- ├── build/                     ← build temporário
- ├── output/                    ← pacotes construídos
- └── var/lib/pkgdb/             ← banco de pacotes instalados/logs
+ ├── sources/                   ← arquivos fonte (.tar.xz)
+ ├── build/                     ← diretório temporário de compilação
+ ├── output/                    ← pacotes construídos (.tar.xz)
+ ├── temp-install/              ← instalação temporária
+ └── var/lib/pkgdb/             ← banco de dados de pacotes e logs
 
 -------------------------------------------------
-2. ARQUIVO DE CONFIGURAÇÃO GLOBAL
----------------------------------
-config.txt define variáveis essenciais:
+2. ARQUIVO DE CONFIGURAÇÃO GLOBAL (config.txt)
+----------------------------------------------
+Define variáveis de ambiente essenciais:
 - PKG_TREE="/system-root/package"
 - BUILD_DIR="/system-root/build"
 - DESTDIR="/system-root/temp-install"
+- SOURCES_DIR="/system-root/sources"
+- OUTPUT_DIR="/system-root/output"
 - LOG_DIR="/system-root/var/log/pkg"
+- PKGDB="/system-root/var/lib/pkgdb/installed.db"
 
 -------------------------------------------------
-3. FLUXO DE COMANDO DO USUÁRIO
--------------------------------
-Exemplos de comandos:
+3. COMANDO PRINCIPAL (CLI) - “pkg”
+-----------------------------------
+Localização: /usr/bin/pkg  
+Função: interface do usuário que chama o controller com os argumentos originais
 
-pkg install <pacote>
-pkg uninstall <pacote>
-pkg update <pacote>
-pkg verify <pacote>
-pkg rebuild <pacote>
+Sintaxe:
+  pkg install <pacote>
+  pkg update <pacote>
+  pkg uninstall <pacote>
+  pkg verify <pacote>
+  pkg rebuild <pacote>
+  pkg info <pacote>
+  pkg list
+  pkg search <termo>
 
-Todos os comandos passam pelo script controller, que:
-1. Localiza o .desc do pacote
-2. Chama o resolvedor de dependências (depsolve)
-3. Executa os scripts na ordem correta
+Internamente, o comando executa:
+  exec /system-root/scripts/controller "$@"
 
 -------------------------------------------------
-4. SCRIPTS PRINCIPAIS E FUNÇÕES
---------------------------------
+4. CONTROLLER (NÚCLEO)
+-----------------------
+Localização: /system-root/scripts/controller  
+Função: motor de decisão que orquestra todo o sistema
+
+Comandos suportados:
+  install     → baixa, resolve dependências e instala o pacote
+  uninstall   → remove pacote e registros
+  update      → busca versão estável mais recente e reconstrói
+  verify      → testa integridade, dependências e build
+  rebuild     → reconstrói pacote instalado
+  info        → exibe informações do .desc
+  list        → lista pacotes instalados
+  search      → procura pacotes disponíveis
+
+Fluxo interno:
+  1. Lê config.txt
+  2. Localiza .desc no PKG_TREE
+  3. Chama depsolve para resolver dependências
+  4. Executa scripts conforme o comando
+  5. Gera logs detalhados
+  6. Atualiza banco de pacotes (installed.db)
+
+-------------------------------------------------
+5. SCRIPTS PRINCIPAIS
+----------------------
 
 1) fetch
-   - Baixa tarball da URL do .desc
-   - Verifica SHA256
-   - Armazena em sources/
+   - Lê URL e SHA256 do .desc
+   - Baixa o tarball para /sources
+   - Verifica integridade
 
 2) extract
-   - Extrai tarball em build/<nome>-<versão>/
-   - Prepara ambiente de compilação isolado
+   - Extrai tarball no /build
+   - Prepara ambiente de compilação
 
 3) depsolve
-   - Lê BUILD_DEPS e RUN_DEPS do .desc
-   - Resolve dependências em ordem topológica
-   - Agenda build/updates de dependências antes do pacote principal
+   - Lê BUILD_DEPS e RUN_DEPS
+   - Verifica pacotes instalados
+   - Resolve ordem topológica
+   - Chama install automático das dependências faltantes
 
 4) build
-   - Detecta BUILD_HINT (autotools, cmake, meson, custom)
-   - Se BUILD_HINT = custom → executa função build() do .desc
-   - Compila o pacote no BUILD_DIR
-   - Gera logs completos
+   - Lê BUILD_HINT (autotools, cmake, meson, custom)
+   - Executa processo padrão ou função custom build() do .desc
+   - Salva log completo do processo
 
 5) install
-   - Copia arquivos do BUILD_DIR para DESTDIR temporário
-   - Verifica permissões
-   - Executa hooks post-install se existirem
+   - Copia do BUILD_DIR para TEMP_INSTALL
+   - Executa hooks post-install
+   - Atualiza banco de pacotes
 
 6) package
-   - Empacota DESTDIR em output/<pacote>-<versão>.tar.xz
-   - Cria manifest com lista de arquivos e hashes
-   - Atualiza banco de pacotes (installed.db)
+   - Cria pacote compactado (.tar.xz)
+   - Gera manifest de arquivos e hashes
+   - Atualiza registro no banco
 
 7) uninstall-pkg
-   - Lê banco de pacotes
-   - Remove todos os arquivos listados
-   - Remove diretórios vazios e banco de dados
-   - Executa hooks post-uninstall se existirem
-   - Gera logs detalhados
+   - Remove arquivos listados no manifest
+   - Executa hooks post-uninstall
+   - Atualiza banco e gera log
 
 8) update-pkg
-   - Lê .desc do pacote
-   - Busca nova versão estável no repositório oficial
-   - Atualiza VERSION, URL e SHA256 do .desc (faz backup do antigo)
-   - Chama depsolve para verificar dependências da nova versão
-   - Atualiza dependências que não atendem requisitos mínimos
-   - Desencadeia uninstall do pacote antigo
-   - Build + install do pacote atualizado
-   - Hooks pós-build e pós-install
-   - Logs completos do processo
+   - Lê versão e URL do .desc
+   - Busca versão estável maior no site oficial
+   - Atualiza .desc automaticamente
+   - Verifica dependências da nova versão
+   - Reconstrói o pacote com nova versão
+   - Substitui instalação antiga
 
 9) verify-pkg
-   - Localiza .desc
-   - Verifica hash do tarball
-   - Verifica dependências
-   - Build temporário
-   - Install temporário
-   - Teste de funcionalidade mínima (smoke test)
-   - Verifica hooks
-   - Gera log detalhado e arquivo .verified
-
-10) controller
-    - Script central que coordena todos os comandos
-    - Determina ordem de execução e fluxo baseado em .desc
-    - Chama depsolve, build, install, update, uninstall ou verify conforme necessário
+   - Checa hashes do tarball e manifest
+   - Verifica dependências atuais
+   - Build temporário e teste básico de execução
+   - Gera relatório de verificação (.verified)
 
 -------------------------------------------------
-5. HOOKS
-----------
-- Hooks opcionais permitem ações extras antes/depois do build ou instalação
-- Tipos:
-   pre-build, post-build, post-install, post-uninstall
-- Usados para tarefas críticas como:
-   - atualizar cache de fontes (fc-cache)
-   - atualizar schemas do GLib
-   - atualizar desktop DBs
-   - configurar usuários ou permissões especiais
-- Hooks podem ser genéricos (global) ou específicos por pacote
+6. HOOKS
+---------
+Localização: /hooks/
+
+Funções:
+- pre-build     → ações antes da compilação
+- post-build    → ações após build
+- post-install  → atualizar caches, ícones, schemas, etc.
+- post-uninstall → limpar arquivos e dados residuais
+
+Aplicação:
+- Executados automaticamente se existirem
+- Suportam scripts globais ou específicos por pacote
 
 -------------------------------------------------
-6. MANEJO DE DEPENDÊNCIAS
+7. PACOTES E .DESC
+-------------------
+Cada pacote tem um arquivo .desc contendo:
+  NAME
+  VERSION
+  URL
+  SHA256
+  BUILD_DEPS
+  RUN_DEPS
+  BUILD_HINT
+  STAGE
+  PRIORITY
+
+Pacotes complexos (Firefox, KDE, GNOME) podem incluir função:
+  build() { ... }
+para customizar o processo de compilação.
+
+-------------------------------------------------
+8. SISTEMA DE LOGS
+-------------------
+Localização: /var/log/pkg/
+Tipos de logs:
+- build.log
+- install.log
+- update.log
+- uninstall.log
+- verify.log
+Cada log inclui:
+  - Data/hora
+  - Usuário
+  - Etapas executadas
+  - Saída e erros capturados
+
+-------------------------------------------------
+9. VERIFICAÇÃO DE PACOTES
 --------------------------
-- Dependências de build e runtime são resolvidas automaticamente
-- Update verifica **dependências mínimas da nova versão**
-- Pacotes são atualizados em ordem topológica
-- É possível manter pacotes não afetados intactos para estabilidade
-- Banco de pacotes (installed.db) mantém histórico e versão atual de cada dependência
+verify-pkg executa:
+  - Comparação de SHA256 do tarball
+  - Checagem de dependências instaladas
+  - Rebuild temporário
+  - Teste básico de execução
+  - Resultado armazenado em verify/<pacote>.verified
 
 -------------------------------------------------
-7. FLUXO DE EXECUÇÃO GERAL
----------------------------
-1) Usuario executa comando (ex: pkg update firefox)
-2) Controller localiza .desc do pacote
-3) Depsolve verifica dependências
-4) Para update:
-   a) Busca versão estável maior (não a mais recente)
-   b) Atualiza .desc (backup do antigo)
-   c) Atualiza dependências necessárias
-5) Build temporário / custom build
-6) Install temporário
-7) Hooks pós-build e pós-install
-8) Testes de verificação (se verify-pkg for chamado)
-9) Empacotamento final (package)
-10) Atualiza banco de pacotes e logs
+10. GERENCIAMENTO DE ATUALIZAÇÕES
+---------------------------------
+- update-pkg busca versão estável (não necessariamente a mais recente)
+- Atualiza .desc mantendo compatibilidade com dependências
+- Se nova versão requer dependência mais recente → atualiza dependência
+- Se dependência antiga ainda funciona → mantém estável
+- Todo update gera backup do .desc anterior
 
 -------------------------------------------------
-8. LOGS E MONITORAMENTO
-------------------------
-- Cada ação gera log detalhado em LOG_DIR
-- Build → logs/build/<pacote>.log
-- Install → logs/install/<pacote>.log
-- Update → logs/update/<pacote>.log
-- Uninstall → logs/uninstall/<pacote>.log
-- Verify → logs/verify/<pacote>.log
+11. BANCO DE DADOS DE PACOTES (installed.db)
+--------------------------------------------
+Formato simples de texto:
+  <pacote>;<versão>;<data_instalação>;<build_deps>;<run_deps>;<arquivos>
+
+Usado por:
+  - uninstall-pkg (para remoção)
+  - update-pkg (para substituição)
+  - verify-pkg (para checagem)
 
 -------------------------------------------------
-9. RESUMO FINAL
-----------------
-✔ Sistema modular e automatizado  
-✔ Suporta pacotes simples e complexos (Firefox, KDE, GNOME)  
-✔ Hooks para ações críticas e ajustes de ambiente  
-✔ Scripts principais: fetch, extract, depsolve, build, install, package, uninstall, update, verify  
-✔ Suporte a atualização estável baseada em dependência mínima  
-✔ Banco de pacotes e logs mantêm rastreabilidade completa  
-✔ Sistema robusto para construção de LFS, BLFS e aplicativos complexos
+12. FLUXO DE EXECUÇÃO GERAL
+----------------------------
+1. Usuário executa “pkg install firefox”
+2. CLI chama controller install firefox
+3. Controller:
+   a) Lê config.txt
+   b) Localiza firefox.desc
+   c) Resolve dependências (depsolve)
+   d) Baixa fonte (fetch)
+   e) Extrai (extract)
+   f) Compila (build)
+   g) Instala (install)
+   h) Empacota (package)
+   i) Executa hooks e logs
+4. Banco de pacotes atualizado
+5. Logs salvos e status reportado
 
--------------------------------------------------------
-FIM DO ROADMAP
--------------------------------------------------------
+-------------------------------------------------
+13. FUTURAS EXTENSÕES POSSÍVEIS
+--------------------------------
+- Suporte a compilação paralela e incremental
+- Cache binário de pacotes (repositório local)
+- Ferramentas de rollback
+- Compilação cruzada opcional
+- Build em chroot para isolamento total
+
+-------------------------------------------------
+FIM DO ROADMAP FINAL
+===================================================
