@@ -1,0 +1,193 @@
+ROADMAP ATUALIZADO DO SISTEMA DE BUILD COMPLETO
+================================================
+
+Objetivo:
+---------
+Criar um sistema de construção totalmente automatizado para pacotes simples e complexos (LFS, BLFS, Firefox, KDE, GNOME), x86-64, com suporte a atualização estável, remoção, hooks e verificação completa.
+
+-------------------------------------------------
+1. ESTRUTURA DE DIRETÓRIOS
+---------------------------
+/system-root/
+ ├── config.txt                 ← configuração global
+ ├── scripts/                   ← scripts principais
+ │     ├── fetch
+ │     ├── extract
+ │     ├── build
+ │     ├── install
+ │     ├── package
+ │     ├── uninstall-pkg
+ │     ├── update-pkg
+ │     ├── verify-pkg
+ │     ├── depsolve
+ │     └── controller
+ ├── hooks/                     ← hooks opcionais
+ │     ├── pre-build/
+ │     ├── post-build/
+ │     ├── post-install/
+ │     └── post-uninstall/
+ ├── package/                   ← repositório de receitas (.desc)
+ │     ├── base/
+ │     ├── libs/
+ │     ├── apps/
+ │     └── desktop/
+ ├── sources/                   ← tarballs baixados
+ ├── build/                     ← build temporário
+ ├── output/                    ← pacotes construídos
+ └── var/lib/pkgdb/             ← banco de pacotes instalados/logs
+
+-------------------------------------------------
+2. ARQUIVO DE CONFIGURAÇÃO GLOBAL
+---------------------------------
+config.txt define variáveis essenciais:
+- PKG_TREE="/system-root/package"
+- BUILD_DIR="/system-root/build"
+- DESTDIR="/system-root/temp-install"
+- LOG_DIR="/system-root/var/log/pkg"
+
+-------------------------------------------------
+3. FLUXO DE COMANDO DO USUÁRIO
+-------------------------------
+Exemplos de comandos:
+
+pkg install <pacote>
+pkg uninstall <pacote>
+pkg update <pacote>
+pkg verify <pacote>
+pkg rebuild <pacote>
+
+Todos os comandos passam pelo script controller, que:
+1. Localiza o .desc do pacote
+2. Chama o resolvedor de dependências (depsolve)
+3. Executa os scripts na ordem correta
+
+-------------------------------------------------
+4. SCRIPTS PRINCIPAIS E FUNÇÕES
+--------------------------------
+
+1) fetch
+   - Baixa tarball da URL do .desc
+   - Verifica SHA256
+   - Armazena em sources/
+
+2) extract
+   - Extrai tarball em build/<nome>-<versão>/
+   - Prepara ambiente de compilação isolado
+
+3) depsolve
+   - Lê BUILD_DEPS e RUN_DEPS do .desc
+   - Resolve dependências em ordem topológica
+   - Agenda build/updates de dependências antes do pacote principal
+
+4) build
+   - Detecta BUILD_HINT (autotools, cmake, meson, custom)
+   - Se BUILD_HINT = custom → executa função build() do .desc
+   - Compila o pacote no BUILD_DIR
+   - Gera logs completos
+
+5) install
+   - Copia arquivos do BUILD_DIR para DESTDIR temporário
+   - Verifica permissões
+   - Executa hooks post-install se existirem
+
+6) package
+   - Empacota DESTDIR em output/<pacote>-<versão>.tar.xz
+   - Cria manifest com lista de arquivos e hashes
+   - Atualiza banco de pacotes (installed.db)
+
+7) uninstall-pkg
+   - Lê banco de pacotes
+   - Remove todos os arquivos listados
+   - Remove diretórios vazios e banco de dados
+   - Executa hooks post-uninstall se existirem
+   - Gera logs detalhados
+
+8) update-pkg
+   - Lê .desc do pacote
+   - Busca nova versão estável no repositório oficial
+   - Atualiza VERSION, URL e SHA256 do .desc (faz backup do antigo)
+   - Chama depsolve para verificar dependências da nova versão
+   - Atualiza dependências que não atendem requisitos mínimos
+   - Desencadeia uninstall do pacote antigo
+   - Build + install do pacote atualizado
+   - Hooks pós-build e pós-install
+   - Logs completos do processo
+
+9) verify-pkg
+   - Localiza .desc
+   - Verifica hash do tarball
+   - Verifica dependências
+   - Build temporário
+   - Install temporário
+   - Teste de funcionalidade mínima (smoke test)
+   - Verifica hooks
+   - Gera log detalhado e arquivo .verified
+
+10) controller
+    - Script central que coordena todos os comandos
+    - Determina ordem de execução e fluxo baseado em .desc
+    - Chama depsolve, build, install, update, uninstall ou verify conforme necessário
+
+-------------------------------------------------
+5. HOOKS
+----------
+- Hooks opcionais permitem ações extras antes/depois do build ou instalação
+- Tipos:
+   pre-build, post-build, post-install, post-uninstall
+- Usados para tarefas críticas como:
+   - atualizar cache de fontes (fc-cache)
+   - atualizar schemas do GLib
+   - atualizar desktop DBs
+   - configurar usuários ou permissões especiais
+- Hooks podem ser genéricos (global) ou específicos por pacote
+
+-------------------------------------------------
+6. MANEJO DE DEPENDÊNCIAS
+--------------------------
+- Dependências de build e runtime são resolvidas automaticamente
+- Update verifica **dependências mínimas da nova versão**
+- Pacotes são atualizados em ordem topológica
+- É possível manter pacotes não afetados intactos para estabilidade
+- Banco de pacotes (installed.db) mantém histórico e versão atual de cada dependência
+
+-------------------------------------------------
+7. FLUXO DE EXECUÇÃO GERAL
+---------------------------
+1) Usuario executa comando (ex: pkg update firefox)
+2) Controller localiza .desc do pacote
+3) Depsolve verifica dependências
+4) Para update:
+   a) Busca versão estável maior (não a mais recente)
+   b) Atualiza .desc (backup do antigo)
+   c) Atualiza dependências necessárias
+5) Build temporário / custom build
+6) Install temporário
+7) Hooks pós-build e pós-install
+8) Testes de verificação (se verify-pkg for chamado)
+9) Empacotamento final (package)
+10) Atualiza banco de pacotes e logs
+
+-------------------------------------------------
+8. LOGS E MONITORAMENTO
+------------------------
+- Cada ação gera log detalhado em LOG_DIR
+- Build → logs/build/<pacote>.log
+- Install → logs/install/<pacote>.log
+- Update → logs/update/<pacote>.log
+- Uninstall → logs/uninstall/<pacote>.log
+- Verify → logs/verify/<pacote>.log
+
+-------------------------------------------------
+9. RESUMO FINAL
+----------------
+✔ Sistema modular e automatizado  
+✔ Suporta pacotes simples e complexos (Firefox, KDE, GNOME)  
+✔ Hooks para ações críticas e ajustes de ambiente  
+✔ Scripts principais: fetch, extract, depsolve, build, install, package, uninstall, update, verify  
+✔ Suporte a atualização estável baseada em dependência mínima  
+✔ Banco de pacotes e logs mantêm rastreabilidade completa  
+✔ Sistema robusto para construção de LFS, BLFS e aplicativos complexos
+
+-------------------------------------------------------
+FIM DO ROADMAP
+-------------------------------------------------------
