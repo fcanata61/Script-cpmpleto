@@ -1,0 +1,139 @@
+# roadmap.txt
+# Sistema de Construção e Empacotamento Automático - Minimalista e Capaz
+
+## Estrutura de Diretórios
+
+/usr/bin/              → scripts principais
+/var/adm/
+ ├── repo/             → repositórios de pacotes (desc)
+ │    ├── base/
+ │    ├── libs/
+ │    ├── x11/
+ │    ├── kde/
+ │    └── gnome/
+ ├── log/              → logs de cada operação
+ ├── cache/
+ │    ├── src/         → fontes baixadas
+ │    ├── bin/         → pacotes compilados
+ │    └── tmp/         → área temporária
+ ├── state/            → pacotes instalados
+ ├── env/              → variáveis globais
+ └── hooks/            → hooks globais do sistema
+
+
+## Scripts em /usr/bin
+
+utils       → cria estrutura /var/adm e checa ferramentas base
+pkg         → CLI principal: deps-check, fetch, build, install, remove, update, verify
+build       → aplica patch e hooks e compila e empacota um pacote a partir do desc em destdir
+deps-check  → resolve dependências recursivamente (profundas)
+install     → instala o pacote .pkg.tar e executa hooks e resolve dependências 
+uninstall   → remove pacote, executa hooks e limpa registros e verify
+update      → busca nova versão estável e atualiza o desc resolve dependências constrói 
+verify      → verifica integridade e dependências do pacote e órfãos 
+fetch       → baixa multiplas fonte em todos os formatos e valida SHA256 e extrai para diretório de trabalho
+clean       → limpa cache, temporários e logs antigos, tmp, Diretórios de trabalho
+
+
+## Fluxo de Construção
+
+1. `pkg install <nome>`
+2. build chama deps-check
+3. deps-check lê dependências recursivas
+4. cada pacote:
+   - baixa fonte
+   - aplica patches
+   - executa hooks pré/pós
+   - compila conforme BUILD_HINT
+   - empacota
+   - instala
+5. logs gravados em /var/adm/log
+6. cache reutilizado
+7. estado atualizado
+
+
+## Hooks por Pacote (em /var/adm/repo/.../hooks)
+
+pre-prepare
+post-prepare
+pre-compile
+post-compile
+pre-install
+post-install
+pre-uninstall
+post-uninstall
+
+## Patches Automáticos
+
+Diretório: /var/adm/repo/<categoria>/<pacote>/patches/
+Arquivos: 001-*, 002-* ...
+Aplicação automática antes da compilação.
+
+
+## Exemplo desc
+
+NAME = bc
+VERSION = 1.08.2
+URL = https://ftp.gnu.org/gnu
+SOURCE = https://ftp.gnu.org/gnu/$NAME/$NAME-$VERSION.tar.xz
+SHA256 = 76e3a9531c7764bd13c600c1e016e6760d9b8379ba06d1ecc08d5a68
+BUILD_DEPS = readline
+RUN_DEPS =
+BUILD_HINT = autotools
+STAGE = 2
+CATEGORY = base
+
+# opcional:só para programas complexos
+# build() {
+#     ./configure --prefix=/usr
+#     make
+#     make install
+# }
+
+
+## Lógica do Deps-Check (Recursiva Simples)
+
+1. lê BUILD_DEPS e RUN_DEPS do pacote
+2. abre desc de cada dependência
+3. repete recursivamente
+4. gera lista linear sem duplicatas
+5. instala/compila em ordem
+
+
+## Diretórios de Logs e Cache
+
+/var/adm/log/<pacote>.log      → log completo de build/install
+/var/adm/cache/src/            → fontes baixadas
+/var/adm/cache/bin/            → pacotes compilados
+/var/adm/cache/tmp/            → builds temporários
+
+
+## Comandos do Controlador (pkg)
+
+pkg build <nome>
+pkg install <nome>
+pkg remove <nome>
+pkg update <nome>
+pkg verify <nome>
+pkg extract <nome> ele baixa e extrai pro diretório de trabalho
+pkg download <nome> baixa o source sem extrair
+pkg clean
+pkg create-desc <categoria> <nome> cria a categoria a pasta do programa e o desc pastas de hooks,patch
+plg deps <nome> mostra todas as dependências do programa
+pkg search <nome> procura por programa
+pkg info <nome> mostra informações completa do programa
+pkg all <nome> faz o pipeline completo de instalação resolvendo dependências 
+
+
+## Benefícios
+
+- Minimalista e shell puro
+- Resolve dependências profundas linearmente
+- Suporte a hooks e patches automáticos
+- Estrutura simples e previsível
+- Capaz de construir LFS, BLFS, KDE, GNOME, Firefox
+- Totalmente auditável e reprodutível
+- todos os scripts tem que criar,verificar e cuidar de suas pastas e arquivos
+
+
+## Fim do Roadmap
