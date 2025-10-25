@@ -1,0 +1,166 @@
+# roadmap-t2sde-simplificado.txt
+# Sistema de Build Inspirado no T2 SDE (sem cross-compilação)
+
+## Objetivo
+Criar um sistema de construção baseado no modelo do T2 SDE,
+mas simplificado para uma única arquitetura (x86_64).
+O foco é reprodutibilidade, modularidade e automação completa
+em shell puro, sem dependências externas complexas.
+
+
+## Estrutura de Diretórios
+
+/usr/bin/                  → scripts principais
+/var/adm/
+ ├── repo/                 → repositório de pacotes (.desc)
+ │    ├── base/
+ │    ├── libs/
+ │    ├── x11/
+ │    ├── kde/
+ │    └── gnome/
+ ├── log/                  → logs de compilação e instalação
+ ├── cache/
+ │    ├── src/             → cache de fontes
+ │    ├── bin/             → pacotes binários resultantes
+ │    └── tmp/             → diretórios temporários de build
+ ├── state/                → pacotes instalados e metadados
+ ├── env/                  → variáveis globais e configurações
+ └── hooks/                → hooks globais de build
+
+
+## Scripts Principais (em /usr/bin)
+
+1. Config
+   - Lê e aplica configurações globais do sistema.
+   - Define variáveis como PREFIX, ARCH, CFLAGS, MAKEFLAGS.
+   - Carrega funções auxiliares de configuração.
+
+2. Bootstrap
+   - Inicializa o ambiente de build.
+   - Cria diretórios em /var/adm.
+   - Testa ferramentas essenciais (bash, tar, make, gcc).
+   - Prepara variáveis padrão para a arquitetura local (x86_64).
+   - Gera o primeiro toolchain local.
+
+3. Check-Deps
+   - Verifica dependências básicas do ambiente (gcc, make, bison, flex, etc).
+   - Garante que o sistema host tem o necessário para construir o primeiro pacote.
+   - Pode ser chamado antes de iniciar qualquer build.
+
+4. Create-PkgQueue
+   - Gera a lista ordenada de pacotes a serem construídos.
+   - Lê todos os .desc e ordena conforme STAGE e dependências.
+   - Sem cross nem múltiplas arquiteturas — assume target == host.
+   - Salva a ordem de build em /var/adm/state/pkgqueue.list.
+
+5. Build-Pkg
+   - Função principal de construção.
+   - Lê o .desc do pacote.
+   - Executa:
+     1. fetch → baixa e valida o source.
+     2. unpack → extrai em /var/adm/cache/tmp.
+     3. patch → aplica patches encontrados em patches/.
+     4. prepare → hooks pré-configuração.
+     5. compile → executa build conforme BUILD_HINT.
+     6. install → instala em diretório temporário DESTDIR.
+     7. package → cria arquivo binário .pkg.tar.
+     8. register → grava em state/installed.list.
+   - Log completo em /var/adm/log/<pkg>.log.
+
+6. Emerge-Pkg
+   - Controla a construção em lote de pacotes.
+   - Lê pkgqueue.list e chama Build-Pkg para cada pacote em ordem.
+   - Detecta falhas e pausa a fila.
+   - Permite retomar o processo do ponto onde parou.
+
+7. Update-Pkg
+   - Atualiza um pacote específico:
+     - Lê o URL base e detecta nova versão estável.
+     - Atualiza campos VERSION, URL e SHA256 no .desc.
+     - Recompila e substitui binário.
+     - Mantém dependências originais.
+   - Log em /var/adm/log/update-<pkg>.log.
+
+8. Cleanup
+   - Remove diretórios temporários antigos.
+   - Limpa caches inválidos e logs muito antigos.
+   - Mantém apenas últimos builds bem-sucedidos.
+
+9. Verify-Pkg
+   - Verifica integridade de instalação.
+   - Recalcula checksums e compara com manifest.
+   - Valida presença de dependências.
+   - Reporta divergências ou arquivos ausentes.
+
+
+## Estrutura de Pacote (.desc)
+
+Exemplo: /var/adm/repo/base/bc/bc.desc
+
+NAME = bc
+VERSION = 1.08.2
+URL = https://ftp.gnu.org/gnu/bc/bc-1.08.2.tar.xz
+SHA256 = 76e3a9531c7764bd13c600c1e016e6760d9b8379ba06d1ecc08d5a68
+BUILD_DEPS = readline
+RUN_DEPS =
+BUILD_HINT = autotools
+STAGE = 1
+PRIORITY = normal
+
+Campos adicionais:
+HOOKS_DIR = hooks
+PATCHES_DIR = patches
+
+
+## Hooks
+
+Cada pacote pode conter um diretório hooks/ com scripts:
+
+pre-prepare
+post-prepare
+pre-compile
+post-compile
+pre-install
+post-install
+pre-uninstall
+post-uninstall
+
+Executados automaticamente pelo Build-Pkg nas etapas correspondentes.
+
+
+## Patches
+
+Diretório: /var/adm/repo/<categoria>/<pacote>/patches/
+Arquivos aplicados automaticamente antes da compilação,
+em ordem numérica (001-*, 002-*, ...).
+
+
+## Fluxo de Construção
+
+1. bootstrap → prepara ambiente
+2. create-pkgqueue → gera lista ordenada
+3. emerge-pkg → constrói todos os pacotes em sequência
+4. build-pkg → compila individualmente
+5. update-pkg → atualiza versões quando necessário
+6. cleanup → remove resíduos
+7. verify-pkg → valida integridade final
+
+
+## Regras Gerais
+
+- Sem suporte a cross-compilação
+- Arquitetura fixa: x86_64
+- Dependências resolvidas linearmente (recursão simples)
+- Fonte, patch e build sempre controlados pelo .desc
+- Todos os logs e caches ficam em /var/adm
+- Nenhum script depende de sistema de build externo
+
+
+## Resultado
+
+- Sistema totalmente shell puro, modular e previsível
+- Capaz de construir sistemas completos (LFS, BLFS, KDE, GNOME, Firefox)
+- Reprodutível e fácil de depurar
+- Mantém a filosofia original do T2, mas mais leve e direto
+
+# Fim do Roadmap
