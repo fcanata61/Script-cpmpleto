@@ -1,0 +1,62 @@
+=== Build System ===
+Target: x86_64
+Build started: Fri Oct 24 12:30:12 UTC 2025
+------------------------------------------------------------
+
+>>> Preparing package: bc-1.08.2
+--> Checking build dependencies... OK
+--> Fetching source: https://ftp.gnu.org/gnu/bc/bc-1.08.2.tar.xz
+    Source already cached. Skipping download.
+--> Verifying checksum... OK
+--> Unpacking source... OK
+--> Applying patches... none
+--> Running pre-prepare hooks... OK
+--> Configuring (autotools)... OK
+--> Compiling... OK
+--> Running post-compile hooks... OK
+--> Installing to image directory... OK
+--> Running post-install hooks... OK
+--> Creating binary package... OK
+--> Registering package in system database... OK
+>>> Package built successfully: bc-1.08.2
+Log saved: /usr/src/adm/log/bc-1.08.2.log
+
+------------------------------------------------------------
+>>> Preparing package: readline-8.2
+--> Fetching source... OK
+--> Unpacking... OK
+--> Configuring (autotools)... OK
+--> Compiling... OK
+--> Installing... OK
+>>> Package built successfully: readline-8.2
+Log saved: /usr/src/adm/log/readline-8.2.log
+
+------------------------------------------------------------
+>>> Building meta target: base-system
+Packages: 120 total
+Completed: 5 / 120 (4%)
+Building: bash-5.2.15 → compiling... OK
+Building: coreutils-9.4 → compiling... OK
+Building: glibc-2.39 → compiling... OK
+Building: gcc-14.1.0 → compiling... OK
+Building: linux-6.12 → compiling... OK
+Building: xorg-server-21.1.12 → compiling... OK
+Building: firefox-132.0 → fetching source... OK
+Building: firefox-132.0 → unpacking... OK
+Building: firefox-132.0 → applying patches... OK
+Building: firefox-132.0 → configuring (mozbuild)... OK
+Building: firefox-132.0 → compiling... (this may take a while)
+[###############################################] 100%
+Building: firefox-132.0 → installing... OK
+>>> Package built successfully: firefox-132.0
+Log saved: /usr/src/adm/log/firefox-132.0.log
+
+------------------------------------------------------------
+=== Build summary ===
+Total packages built: 120
+Succeeded: 120
+Failed: 0
+Total time: 3h 45m 22s
+Logs available in: /usr/src/adm/log/
+------------------------------------------------------------
+Build finished: Fri Oct 24 16:15:34 UTC 2025
