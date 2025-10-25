@@ -1,0 +1,169 @@
+# roadmap-t2sde-simplificado.txt
+# Sistema de Build Inspirado no T2 SDE (sem cross-compilação)
+
+## Objetivo
+Criar um sistema de construção baseado no modelo do T2 SDE,
+mas simplificado para uma única arquitetura (x86_64).
+O foco é reprodutibilidade, modularidade e automação completa
+em shell puro, sem dependências externas complexas.
+Saída na tela limpa e informativa, com logs completos em arquivo.
+
+
+## Estrutura de Diretórios
+
+/usr/bin/                  → scripts principais
+/var/adm/
+ ├── repo/                 → repositório de pacotes (.desc)
+ │    ├── base/
+ │    ├── libs/
+ │    ├── x11/
+ │    ├── kde/
+ │    └── gnome/
+ ├── log/                  → logs detalhados de compilação e instalação
+ ├── cache/
+ │    ├── src/             → cache de fontes
+ │    ├── bin/             → pacotes binários resultantes
+ │    └── tmp/             → diretórios temporários de build
+ ├── state/                → pacotes instalados e metadados
+ ├── env/                  → variáveis globais e configurações
+ └── hooks/                → hooks globais de build
+
+
+## Padrão de Saída
+
+- A saída na tela deve ser **curta, limpa e de alto nível**.
+- Mostra apenas: nome do pacote, etapa atual e status (OK/FAIL).
+- Mensagens coloridas simples (verde, amarelo, vermelho).
+- Logs completos e detalhados vão para /var/adm/log/<pkg>.log.
+- O usuário nunca vê a verbosidade do compilador ou make.
+- Em falhas, mostra apenas resumo e o caminho do log.
+
+
+## Scripts Principais (em /usr/bin)
+
+1. Config
+   - Lê e aplica configurações globais.
+   - Define variáveis como PREFIX, ARCH, CFLAGS, MAKEFLAGS.
+   - Carrega funções auxiliares de configuração.
+
+2. Bootstrap
+   - Inicializa o ambiente de build.
+   - Cria diretórios em /var/adm.
+   - Testa ferramentas essenciais (bash, tar, make, gcc).
+   - Prepara variáveis padrão (x86_64).
+   - Gera o toolchain local inicial.
+   - Mostra na tela: “Inicializando ambiente... OK”
+
+3. Check-Deps
+   - Verifica dependências do ambiente host.
+   - Exibe apenas pacotes ausentes.
+   - Se tudo OK: “Dependências do host verificadas.”
+
+4. Create-PkgQueue
+   - Lê todos os .desc e gera ordem de build.
+   - Salva em /var/adm/state/pkgqueue.list.
+   - Mostra: “Fila de pacotes criada com N entradas.”
+
+5. Build-Pkg
+   - Função principal de compilação.
+   - Etapas:
+     1. fetch → baixa e valida o source
+     2. unpack → extrai em cache/tmp
+     3. patch → aplica patches automáticos
+     4. prepare → executa hooks pré-configuração
+     5. compile → compila conforme BUILD_HINT
+     6. install → instala em DESTDIR
+     7. package → cria pacote binário
+     8. register → registra no sistema
+   - Saída na tela:
+     ```
+     [bc] → preparando... OK
+     [bc] → compilando... OK
+     [bc] → empacotando... OK
+     ```
+   - Log completo: /var/adm/log/bc.log
+
+6. Emerge-Pkg
+   - Constrói pacotes em sequência conforme pkgqueue.list.
+   - Mostra progresso:
+     ```
+     === Iniciando construção de 250 pacotes ===
+     (12/250) firefox → compilando... OK
+     ```
+   - Em erro: pausa e indica log.
+
+7. Update-Pkg
+   - Atualiza versões estáveis de pacotes.
+   - Mostra:
+     ```
+     [curl] → versão local 8.6.0, nova 8.7.1 → atualizando...
+     ```
+   - Atualiza .desc, recompila, substitui pacote.
+
+8. Cleanup
+   - Limpa diretórios temporários, caches antigos e logs velhos.
+   - Mostra: “Limpeza concluída. 3 GB liberados.”
+
+9. Verify-Pkg
+   - Verifica integridade e dependências dos pacotes instalados.
+   - Exibe resumo simples:
+     ```
+     Verificação: 150 pacotes verificados, 2 inconsistências encontradas.
+     ```
+   - Logs detalhados em /var/adm/log/verify.log.
+
+
+## Estrutura de Pacote (.desc)
+
+Exemplo: /var/adm/repo/base/bc/bc.desc
+
+NAME = bc
+VERSION = 1.08.2
+URL = https://ftp.gnu.org/gnu/bc/bc-1.08.2.tar.xz
+SHA256 = 76e3a9531c7764bd13c600c1e016e6760d9b8379ba06d1ecc08d5a68
+BUILD_DEPS = readline
+RUN_DEPS =
+BUILD_HINT = autotools
+STAGE = 1
+PRIORITY = normal
+HOOKS_DIR = hooks
+PATCHES_DIR = patches
+
+
+## Hooks e Patches
+
+Cada pacote pode conter:
+- hooks/ com scripts de pré/pós etapas (prepare, compile, install, uninstall)
+- patches/ com correções aplicadas automaticamente em ordem numérica
+
+
+## Fluxo Completo
+
+1. bootstrap → prepara ambiente
+2. create-pkgqueue → cria ordem de build
+3. emerge-pkg → constrói em sequência
+4. build-pkg → executa etapas internas
+5. update-pkg → mantém pacotes atualizados
+6. cleanup → limpa sistema
+7. verify-pkg → audita integridade
+
+
+## Características Gerais
+
+- Apenas arquitetura x86_64
+- Dependências resolvidas recursivamente
+- Patches automáticos aplicados
+- Hooks opcionais por pacote
+- Logs completos, mas saída limpa
+- Nenhum código externo (make, gcc, tar, bash apenas)
+- Constrói desde base (LFS) até KDE, GNOME e Firefox
+
+
+## Resultado Final
+
+Sistema shell modular e estável,
+com relatórios claros, build reprodutível e interface mínima.
+Capaz de construir um sistema Linux completo de forma previsível,
+sem ruído na tela, mas com rastreabilidade total via logs.
+
+# Fim do Roadmap
