@@ -1,0 +1,158 @@
+===============================
+ROADMAP — LBUILD NEXT
+===============================
+
+Objetivo:
+---------
+Sistema de shell scripts simples, autossuficiente e modular, capaz de:
+- construir LFS, BLFS, Xorg, GNOME, KDE e qualquer programa;
+- instalar, atualizar e desinstalar pacotes com rastreio de órfãos;
+- empacotar binários, manter cache de fontes e binários;
+- suportar downloads múltiplos e paralelos;
+- realizar limpeza/faxina automatizada do sistema;
+- gerar logs coloridos e manifests detalhados;
+- operar sem dependências externas além de POSIX shell.
+
+Estrutura de Diretórios:
+------------------------
+lbuild/
+ ├── pkgs/             # cada pacote em sua pasta (PKGINFO, build.instr, patches, hooks)
+ ├── scripts/          # scripts centrais (build.sh, install.sh, uninstall.sh, update.sh, cache.sh, clean.sh, deps.sh, log.sh)
+ ├── db/
+ │    ├── installed/    # pacotes instalados
+ │    ├── manifests/    # manifests de arquivos instalados
+ │    └── build-order.cache
+ ├── distfiles/        # cache de fontes
+ ├── binpkgs/          # cache de pacotes binários
+ └── logs/             # logs coloridos e históricos
+
+Funcionalidades Principais:
+---------------------------
+1. Autodescoberta total
+   - pacotes detectados automaticamente em pkgs/*/PKGINFO
+   - grupos dinâmicos extraídos do campo group
+
+2. Resolução de dependências
+   - depende de PKGINFO → campo depends:
+   - ordenação topológica automática (build-order.cache)
+
+3. Build padronizado
+   - build.instr com seções: [prepare], [configure], [build], [test], [install], [post]
+   - execução sequencial e idempotente
+   - logs coloridos
+
+4. Empacotamento binário
+   - gera `.tar.zst` com arquivos instalados + manifesto + metadados
+   - armazenado em binpkgs/
+   - instalação offline via cache
+
+5. Cache de fontes e binários
+   - distfiles/ para tarballs
+   - binpkgs/ para binários
+   - uso preferencial do cache local
+
+6. Downloads múltiplos e paralelos
+   - suporte a http, https, ftp, git, rsync
+   - múltiplos formatos: .tar.xz, .tar.gz, .tar.zst, .zip, .git
+   - mirrors alternativos automáticos
+
+7. Instalação, atualização e desinstalação
+   - install.sh: instala do binário ou compila se necessário
+   - update.sh: verifica upstream e recompila se houver versão nova
+   - uninstall.sh: remove arquivos do manifesto + órfãos
+
+8. Manifests automáticos
+   - db/manifests/<pkg>.manifest com todos os arquivos instalados
+   - usado para uninstall e empacotamento
+
+9. Hooks de automação
+   - hooks/pre-build, post-build, pre-install, post-install, pre-uninstall, post-uninstall
+   - executados automaticamente no momento certo
+
+10. Faxina automática
+    - clean.sh limpa distfiles e binpkgs obsoletos
+    - remove logs antigos e órfãos residuais
+    - valida integridade do banco de instalados
+
+Arquivos de Controle:
+---------------------
+PKGINFO:
+- Metadados do pacote: nome, versão, dependências, source, licença, grupo, update_policy, build_system
+
+build.instr:
+- Instruções técnicas de build, seções padronizadas
+
+Exemplo PKGINFO (Firefox):
+--------------------------
+name: firefox
+version: 123.0
+release: 1
+group: browsers
+summary: Navegador web moderno baseado no motor Gecko
+description: |
+  Firefox é um navegador completo desenvolvido pela Mozilla Foundation.
+homepage: https://www.mozilla.org/firefox
+license: MPL-2.0
+maintainer: fernando@local
+source: https://archive.mozilla.org/pub/firefox/releases/123.0/source/firefox-123.0.source.tar.xz
+sha256: abcdef...
+depends: gtk3,libx11,libxcb,libpulse,dbus,nss
+build_depends: rust,clang,python3
+provides: web-browser
+build_system: mach
+build_jobs: 8
+install_prefix: /usr
+update_policy: check-upstream
+check_version_url: https://product-details.mozilla.org/1.0/firefox_versions.json
+state: stable
+
+Exemplo build.instr (Firefox):
+-------------------------------
+[prepare]
+unpack source
+cd source/firefox-123.0
+
+[configure]
+./mach configure --prefix=/usr --enable-release
+
+[build]
+./mach build -j$(nproc)
+
+[test]
+./mach test || true
+
+[install]
+./mach install DESTDIR=$DESTDIR
+
+CLI Principal:
+---------------
+lbuild build world        → constrói todo o sistema (LFS+BLFS+extras)
+lbuild build <pkg>        → compila pacote específico
+lbuild install <pkg>      → instala do binário ou compila
+lbuild uninstall <pkg>    → remove pacote e órfãos
+lbuild update all         → atualiza via upstream
+lbuild deps --tree <pkg>  → mostra grafo de dependências
+lbuild clean [--deep]     → limpa cache, binários, logs, órfãos
+lbuild info <pkg>          → exibe PKGINFO e status do pacote
+lbuild list               → lista todos os pacotes detectados
+lbuild rebuild <pkg>       → recompila pacote e gera binário
+
+Filosofia:
+-----------
+- Zero redundância: PKGINFO = fonte única da verdade
+- Automação total: descobre, resolve, compila e instala
+- Universalidade: qualquer software pode ser construído
+- Transparência: logs coloridos, rastreáveis
+- Autossuficiência: apenas POSIX Shell
+- Reprodutibilidade: builds idempotentes
+- Simplicidade: scripts curtos, claros e legíveis
+
+Conclusão:
+-----------
+LBuild Next é um **ecossistema de shell scripts modular**, capaz de:
+- construir um sistema inteiro do zero;
+- gerenciar binários e fontes com cache inteligente;
+- atualizar, remover e limpar pacotes de forma segura e automatizada;
+- funcionar sem listas manuais ou dependências externas, garantindo simplicidade, reprodutibilidade e flexibilidade.
+
+Fim do roadmap.
