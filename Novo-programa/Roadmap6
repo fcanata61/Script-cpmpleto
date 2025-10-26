@@ -1,0 +1,377 @@
+===========================================
+ROADMAP — SISTEMA DE CONSTRUÇÃO MODULAR (SHELL)
+===========================================
+
+Objetivo:
+---------
+Criar um conjunto de scripts POSIX shell simples, portável e sem dependências externas,
+capaz de construir todo o sistema LFS, BLFS, Xorg, GNOME, KDE e Firefox.
+O sistema deve também atualizar pacotes via upstream, desinstalar com detecção de órfãos
+e suportar hooks de pré/pós build e uninstall, com logs coloridos e centralizados.
+
+Princípios:
+-----------
+1. Simplicidade: scripts pequenos e legíveis, sem dependências externas.
+2. Modularidade: cada pacote em pasta própria, com metadados e instruções separadas.
+3. Reprodutibilidade: builds idempotentes, com checksums e logs consistentes.
+4. Transparência: tudo legível em texto puro.
+5. Debug integrado: logs coloridos e detalhados por pacote.
+6. Autossuficiência: executável em ambiente LFS puro.
+
+Estrutura de Diretórios:
+------------------------
+lbuild/
+ ├── scripts/              # scripts shell genéricos (build.sh, fetch.sh, etc.)
+ ├── packages.list         # lista global de pacotes e grupos
+ ├── db/                   # manifestos e metadados locais
+ ├── logs/                 # logs globais
+ ├── distfiles/            # cache de tarballs
+ └── pkgs/                 # cada pacote em sua pasta
+      ├── zlib/
+      │    ├── PKGINFO
+      │    ├── build.instr
+      │    ├── desviar.txt
+      │    ├── patches/
+      │    └── hooks/
+      ├── xorg-server/
+      │    ├── PKGINFO
+      │    ├── build.instr
+      │    └── hooks/
+      └── firefox/
+           ├── PKGINFO
+           ├── build.instr
+           ├── patches/
+           └── hooks/
+
+--------------------------------------------------
+1. packages.list — lista de todos os pacotes e grupos
+--------------------------------------------------
+Formato: grupo:nome[:versão]
+Comentários com '#'
+
+# Grupo: bootstrap
+bootstrap:binutils:2.42
+bootstrap:gcc:14.1.0
+bootstrap:make
+bootstrap:coreutils
+
+# Grupo: core
+core:linux:6.11
+core:glibc
+core:zlib
+core:openssl
+core:pkg-config
+
+# Grupo: xorg
+xorg:libx11
+xorg:libxcb
+xorg:xorg-server
+xorg:mesa
+xorg:xf86-video-intel
+
+# Grupo: desktop-gnome
+desktop-gnome:gnome-shell
+desktop-gnome:gnome-settings-daemon
+desktop-gnome:gdm
+
+# Grupo: desktop-kde
+desktop-kde:plasma-desktop
+desktop-kde:kwin
+desktop-kde:kf5
+
+# Grupo: browsers
+browsers:firefox
+
+--------------------------------------------------
+2. Exemplo de pacote simples — zlib
+--------------------------------------------------
+
+Diretório: pkgs/zlib/
+
+📄 PKGINFO
+----------
+name: zlib
+version: 1.3
+release: 1
+group: core
+summary: Biblioteca de compressão de dados compatível com gzip e deflate
+description: |
+  Zlib é uma biblioteca de compressão de dados amplamente usada,
+  fornecendo as funções deflate/inflate utilizadas por gzip, PNG e outros formatos.
+homepage: https://zlib.net/
+license: Zlib
+source: https://zlib.net/zlib-1.3.tar.xz
+sha256: 9d6c4c3cf7e582c2c9b8a991fbcf3cfc22c3de941b6c8f6c9f7a52e5ed0a18e5
+build_depends: gcc,make
+depends:
+provides: libz
+maintainer: fernando@local
+build_instructions: build.instr
+state: stable
+
+📘 build.instr
+--------------
+[prepare]
+unpack source
+cd source/zlib-1.3
+
+[configure]
+./configure --prefix=/usr
+
+[build]
+make -j$(nproc)
+
+[test]
+make check || true
+
+[install]
+make install DESTDIR=$DESTDIR
+
+📜 desviar.txt
+--------------
+Zlib é uma biblioteca de compressão de dados usada por diversos programas e formatos.
+Este pacote fornece a libz e o binário zlib-flate.
+
+--------------------------------------------------
+3. Exemplo de pacote médio — xorg-server
+--------------------------------------------------
+
+Diretório: pkgs/xorg-server/
+
+📄 PKGINFO
+----------
+name: xorg-server
+version: 21.1.13
+release: 1
+group: xorg
+summary: Servidor de exibição do sistema gráfico X Window
+description: |
+  O Xorg Server fornece a implementação do X11 responsável por gerenciar telas, janelas
+  e dispositivos de entrada. É a base para ambientes gráficos como GNOME e KDE.
+homepage: https://www.x.org
+license: MIT
+source: https://www.x.org/releases/individual/xserver/xorg-server-21.1.13.tar.xz
+sha256: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+build_depends: meson,ninja,pkg-config,xorg-macros
+depends: libx11,libxau,libxcb,libxdmcp,pixman,libdrm,mesa
+provides: x-server
+maintainer: fernando@local
+build_instructions: build.instr
+state: stable
+
+📘 build.instr
+--------------
+[prepare]
+unpack source
+cd source/xorg-server-21.1.13
+apply_patches
+
+[configure]
+meson setup build --prefix=/usr \
+  --localstatedir=/var \
+  -Ddefault_font_path="/usr/share/fonts/misc" \
+  -Dipv6=true -Dxkb_dir=/usr/share/X11/xkb
+
+[build]
+ninja -C build
+
+[test]
+ninja -C build test || true
+
+[install]
+ninja -C build install DESTDIR=$DESTDIR
+
+[post]
+ldconfig || true
+
+📜 desviar.txt
+--------------
+O xorg-server é o servidor X principal, responsável pela comunicação entre o
+hardware gráfico e o ambiente de janelas. Necessário para qualquer ambiente X11.
+
+--------------------------------------------------
+4. Exemplo de pacote grande — firefox
+--------------------------------------------------
+
+Diretório: pkgs/firefox/
+
+📄 PKGINFO
+----------
+name: firefox
+version: 123.0
+release: 1
+group: browsers
+summary: Navegador web moderno baseado no motor Gecko
+description: |
+  O Firefox é um navegador de código aberto desenvolvido pela Mozilla Foundation.
+  Este pacote compila o Firefox a partir do código-fonte oficial.
+homepage: https://www.mozilla.org/firefox
+license: MPL-2.0
+source: https://archive.mozilla.org/pub/firefox/releases/123.0/source/firefox-123.0.source.tar.xz
+sha256: 1a2b3c4d5e6f7g8h9i0jabcdef1234567890abcdef1234567890abcdef1234567
+depends: gtk3,libx11,libxcb,libpulse,libstdc++,nss,alsa-lib,dbus
+build_depends: rust,cbindgen,clang,python3,meson,ninja,autoconf,automake,libtool
+provides: web-browser
+maintainer: fernando@local
+build_instructions: build.instr
+state: stable
+
+📘 build.instr
+--------------
+[env]
+RUSTFLAGS="-C opt-level=2"
+MOZILLA_OFFICIAL=1
+MOZ_ENABLE_RELEASE=1
+
+[prepare]
+unpack source
+cd source/firefox-123.0
+apply_patches
+
+[configure]
+./mach configure \
+  --enable-optimize \
+  --enable-release \
+  --disable-debug \
+  --enable-default-toolkit=cairo-gtk3 \
+  --prefix=/usr
+
+[build]
+./mach build -j$(nproc)
+
+[test]
+./mach smoke-test || true
+
+[install]
+./mach install DESTDIR=$DESTDIR
+
+[post]
+update-desktop-database /usr/share/applications || true
+gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+
+📜 desviar.txt
+--------------
+Firefox — navegador moderno baseado no motor Gecko, com suporte a HTML5, CSS3 e WebAssembly.
+
+--------------------------------------------------
+5. Hooks — exemplo
+--------------------------------------------------
+
+Diretório: pkgs/zlib/hooks/
+  pre-install
+  post-install
+
+Conteúdo de hooks/pre-install:
+#!/bin/sh
+echo "[HOOK] Preparando ambiente para instalação do zlib..."
+
+Conteúdo de hooks/post-install:
+#!/bin/sh
+echo "[HOOK] zlib instalado com sucesso."
+
+Hooks executados automaticamente:
+ pre-build
+ post-build
+ pre-install
+ post-install
+ pre-uninstall
+ post-uninstall
+
+--------------------------------------------------
+6. Fluxo de operação
+--------------------------------------------------
+
+1. Carregar packages.list
+   → Resolve ordem de dependências (topological sort)
+   → Permite build por grupo, pacote ou world.
+
+2. Para cada pacote:
+   a) Ler PKGINFO
+   b) Baixar e verificar source (sha256)
+   c) Aplicar patches
+   d) Executar build.instr passo a passo
+   e) Instalar para DESTDIR
+   f) Registrar manifest e logs
+   g) Executar hooks
+   h) Atualizar banco local (db/installed/...)
+
+3. Logs coloridos:
+   INFO = azul
+   WARN = amarelo
+   ERROR = vermelho
+   SUCCESS = verde
+   DEBUG = magenta
+   → Cada pacote tem log em logs/<pkg>-<data>.log
+
+4. Uninstall:
+   - Ler manifest
+   - Remover arquivos
+   - Executar hooks pre/post uninstall
+   - Rodar detector de órfãos (pacotes sem dependentes)
+
+5. Update:
+   - Checar upstream (quando update_policy=check-upstream)
+   - Se nova versão detectada → baixar, buildar, reinstalar.
+
+--------------------------------------------------
+7. Manifest e Banco de Dados Local
+--------------------------------------------------
+
+Cada pacote instalado gera:
+ /var/lib/lbuild/manifests/<pkg>.manifest
+ com a lista de arquivos instalados.
+
+Exemplo:
+ /usr/lib/libz.so.1.3
+ /usr/lib/libz.so.1
+ /usr/bin/zlib-flate
+
+Banco local (db/installed/<pkg>.meta):
+ name, version, deps, build_date, manifest_path
+
+--------------------------------------------------
+8. Ferramentas principais (scripts shell)
+--------------------------------------------------
+build.sh        - executa pipeline completa (prepare → install)
+fetch.sh        - baixa e verifica fontes
+uninstall.sh    - remove pacote e órfãos
+update.sh       - verifica e atualiza versões
+log.sh          - fornece API de logs coloridos
+hooks.sh        - executa hooks pré/pós
+pkg-index.sh    - resolve dependências
+orphan.sh       - detecta e remove órfãos
+cli.sh          - interface principal (lbuild build, lbuild update, etc.)
+
+--------------------------------------------------
+9. Exemplo de uso CLI
+--------------------------------------------------
+$ lbuild build core
+  → constrói todos os pacotes do grupo core.
+
+$ lbuild build firefox
+  → compila e instala o Firefox.
+
+$ lbuild uninstall firefox
+  → remove o Firefox e detecta órfãos.
+
+$ lbuild update all
+  → verifica atualizações upstream e recompila se necessário.
+
+--------------------------------------------------
+10. Conclusão
+--------------------------------------------------
+Este roadmap define a base para um sistema shell modular,
+inspirado em Gentoo, LFS e Arch, porém autossuficiente e simplificado.
+
+Arquivos:
+ - packages.list        → lista e grupos de pacotes
+ - PKGINFO              → metadados de cada pacote
+ - build.instr          → passos de build
+ - desviar.txt          → descrição
+ - hooks/               → scripts de eventos
+ - patches/             → correções locais
+ - logs/                → registros coloridos
+ - manifests/           → rastreamento de arquivos
+ - scripts/*.sh         → automação principal
+
+Fim do documento.
