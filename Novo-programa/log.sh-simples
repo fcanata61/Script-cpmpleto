@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# log.sh — sistema de mensagens e logs coloridos para construtores shell
+
+# Detecta suporte a cores
+if test -t 1; then
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    MAGENTA=$(tput setaf 5)
+    CYAN=$(tput setaf 6)
+    BOLD=$(tput bold)
+    RESET=$(tput sgr0)
+else
+    RED=""; GREEN=""; YELLOW=""; BLUE=""; MAGENTA=""; CYAN=""; BOLD=""; RESET=""
+fi
+
+# Configuração global
+VERBOSE=${VERBOSE:-1}        # 0=quiet, 1=normal, 2=verbose, 3=debug
+LOGFILE=${LOGFILE:-logs/build.log}
+STEP=0
+TOTAL_STEPS=${TOTAL_STEPS:-0}
+PKG_NAME=${PKG_NAME:-"system"}
+THEME_ICON=${THEME_ICON:-"🔧"}
+THEME_COLOR=${THEME_COLOR:-"${BLUE}"}
+
+# Função central para logar mensagens
+_log() {
+    local level=$1; shift
+    local prefix icon color
+    case "$level" in
+        INFO)   prefix="→";  color=$BLUE;   icon="${THEME_ICON}";;
+        OK)     prefix="✔";  color=$GREEN;  icon="${THEME_ICON}";;
+        WARN)   prefix="!";  color=$YELLOW; icon="⚠";;
+        ERROR)  prefix="✖";  color=$RED;    icon="💥";;
+        DEBUG)  prefix="🐞"; color=$MAGENTA; icon="";;
+    esac
+    # Imprime no console conforme nível
+    if [ "$level" = "ERROR" ] || [ "$VERBOSE" -ge 1 ]; then
+        echo -e "${color}${prefix}${RESET} ${icon} $*" >&2
+    fi
+    # Log completo sempre no arquivo
+    echo "[$(date '+%H:%M:%S')] [$level] $*" >> "$LOGFILE"
+}
+
+msg_info()   { _log INFO  "$@"; }
+msg_ok()     { _log OK    "$@"; }
+msg_warn()   { _log WARN  "$@"; }
+msg_error()  { _log ERROR "$@"; }
+msg_debug()  { [ "$VERBOSE" -ge 3 ] && _log DEBUG "$@"; }
+
+# Etapas numeradas
+step() {
+    STEP=$((STEP+1))
+    msg_info "[$STEP/$TOTAL_STEPS] $*"
+    start_timer
+}
+
+# Temporizador de etapas
+start_timer() { _t0=$(date +%s); }
+end_timer() {
+    local _t1=$(date +%s) _dt=$((_t1 - _t0))
+    msg_ok "Concluído em ${_dt}s"
+}
+
+# Seção de banners
+banner() {
+    local title=$1
+    echo -e "\n${BOLD}${THEME_COLOR}──────────────────────────────────────────${RESET}"
+    echo -e "${THEME_COLOR}${THEME_ICON} ${title}${RESET}"
+    echo -e "${BOLD}${THEME_COLOR}──────────────────────────────────────────${RESET}\n"
+}
+
+# Status final (resumo)
+summary() {
+    local result=$1 time=$2
+    echo -e "${BOLD}${THEME_COLOR}──────────────────────────────────────────${RESET}"
+    echo -e "${THEME_ICON} ${PKG_NAME} build summary"
+    echo -e "Result:  ${result}"
+    [ -n "$time" ] && echo -e "Time:    ${time}s"
+    echo -e "Logs:    ${LOGFILE}"
+    echo -e "${BOLD}${THEME_COLOR}──────────────────────────────────────────${RESET}"
+}
