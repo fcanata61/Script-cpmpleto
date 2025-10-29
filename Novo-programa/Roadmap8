@@ -1,0 +1,152 @@
+============================================================
+           ADM BUILD SYSTEM - ROADMAP (T2SDE EVOLUÍDO)
+============================================================
+
+Base de instalação: /usr/src/adm/
+
+Estrutura de diretórios:
+------------------------
+/usr/src/adm/scripts/    → todos os scripts principais do sistema
+/usr/src/adm/repo/       → repositório de pacotes e metadados
+/usr/src/adm/build/      → diretório temporário de compilação
+/usr/src/adm/logs/       → registros e saídas organizadas por data
+/usr/src/adm/output/     → pacotes prontos e imagens finais
+/usr/src/adm/config/     → arquivos de configuração e perfis de build
+
+------------------------------------------------------------
+Scripts principais (todos em /usr/src/adm/scripts/):
+------------------------------------------------------------
+adm.sh              → script principal (ponto de entrada)
+env.sh              → define variáveis globais
+deps.sh             → verifica dependências do host
+fetch.sh            → baixa código-fonte
+patch.sh            → aplica correções
+build.sh            → compila automaticamente
+install.sh          → instala para árvore temporária
+package.sh          → empacota resultados
+log.sh              → registra tudo (timestamps e erros)
+recover.sh          → retoma builds interrompidos
+colors.sh           → define funções de cor (para terminais reais)
+ui.sh               → interface limpa (progresso e status)
+scheduler.sh        → resolve dependências e ordem de build
+integrity.sh        → verifica hashes e assinaturas
+
+------------------------------------------------------------
+Repositório de pacotes (/usr/src/adm/repo/):
+------------------------------------------------------------
+base/
+  binutils/build.conf
+  gcc/build.conf
+  glibc/build.conf
+
+system/
+  coreutils/build.conf
+  bash/build.conf
+
+desktop/
+  gtk3/build.conf
+  firefox/build.conf
+
+Cada arquivo build.conf contém apenas metadados, por exemplo:
+
+NAME=firefox
+VERSION=130.0
+URL=https://ftp.mozilla.org/pub/firefox/releases/130.0/source.tar.xz
+DEPEND=gtk3,cairo,rust
+BUILD=autotools
+JOBS=8
+STRIP=yes
+
+------------------------------------------------------------
+Fluxo automático (sem comandos manuais):
+------------------------------------------------------------
+1. Executar apenas:
+   sudo /usr/src/adm/scripts/adm.sh
+
+2. O sistema faz automaticamente:
+   - Carrega ambiente (env.sh)
+   - Checa dependências (deps.sh)
+   - Lê perfil ativo (/usr/src/adm/config/default.conf)
+   - Monta plano de compilação (scheduler.sh)
+   - Para cada pacote:
+       fetch.sh → baixa
+       integrity.sh → verifica
+       patch.sh → aplica
+       build.sh → compila
+       install.sh → instala
+       package.sh → empacota
+   - log.sh registra tudo
+   - ui.sh exibe progresso e status no terminal
+
+------------------------------------------------------------
+Etapas de desenvolvimento (roadmap cronológico):
+------------------------------------------------------------
+Fase 1: Base estrutural
+  - Criar /usr/src/adm/ com pastas scripts, repo, logs, output
+  - Resultado: estrutura limpa e organizada
+
+Fase 2: Core scripts
+  - Implementar env.sh, log.sh, colors.sh
+  - Resultado: ambiente e sistema de logs prontos
+
+Fase 3: Fetch + Integrity
+  - Adicionar fetch.sh e integrity.sh
+  - Resultado: download e verificação automáticos
+
+Fase 4: Build engine
+  - Criar build.sh, install.sh, package.sh
+  - Resultado: compilação automatizada
+
+Fase 5: Scheduler
+  - Adicionar scheduler.sh
+  - Resultado: ordem automática de dependências
+
+Fase 6: UI e cores
+  - Adicionar ui.sh para progresso e feedback visual
+  - Resultado: interface limpa e intuitiva
+
+Fase 7: Repositório de pacotes
+  - Criar /repo/ com arquivos build.conf
+  - Resultado: base funcional de pacotes
+
+Fase 8: Recuperação automática
+  - Implementar recover.sh
+  - Resultado: retoma builds interrompidos
+
+Fase 9: Perfis de compilação
+  - Criar /config/ com perfis (desktop, server, minimal)
+  - Resultado: flexibilidade de builds
+
+Fase 10: Otimização final
+  - Implementar paralelismo, cache e logs avançados
+  - Resultado: build rápido, limpo e confiável
+
+------------------------------------------------------------
+Filosofia do projeto:
+------------------------------------------------------------
+- Tudo automático: um comando constrói o sistema inteiro.
+- 100% declarativo: pacotes definidos apenas por metadados.
+- Sem dependências externas além de bash, coreutils, wget, make, tar.
+- Logs e interface limpos, sem ruído.
+- Recuperação inteligente: nunca recomeça do zero.
+- Toda a estrutura centralizada em /usr/src/adm.
+
+------------------------------------------------------------
+Exemplo de execução:
+------------------------------------------------------------
+ADM Build System — Auto Mode
+[✔] Ambiente pronto (x86_64)
+[✔] Perfil carregado: desktop
+[✔] 12 pacotes detectados
+
+[building] gcc-14.2.0 ...
+[building] glibc-2.40 ...
+[building] firefox-130.0 ...
+[✔] Build completo — 5h41m
+
+Pacotes: /usr/src/adm/output/packages/
+Logs:    /usr/src/adm/logs/2025-10-29/
+
+============================================================
+FIM DO ROADMAP
+============================================================
